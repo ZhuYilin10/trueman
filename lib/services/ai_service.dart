@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:trueman/data/models.dart';
+import 'package:trueman/data/default_npcs.dart';
 import 'package:uuid/uuid.dart';
 
 class AIService {
@@ -13,29 +16,8 @@ class AIService {
   final Dio _dio = Dio();
 
   // Defined Cast of Characters
-  final List<Persona> _cast = [
-    Persona(
-      id: 'npc_1',
-      name: '老王 (Old Wang)',
-      avatar: '😠',
-      systemPrompt:
-          '你是“老王”，一个愤世嫉俗、脾气暴躁的中年邻居。你喜欢批评一切，但内心深处其实是关心的。你的回复简短、讽刺且有力。你总是能找到角度抱怨社会或年轻人，口头禅是“现在的年轻人啊...”。请用中文回复。',
-    ),
-    Persona(
-      id: 'npc_2',
-      name: 'Alice',
-      avatar: '✨',
-      systemPrompt:
-          '你是“Alice”，一个超级热情的 Z 世代女孩。你喜欢使用大量的 Emoji 表情。你非常支持、乐观，并且热爱社交媒体潮流。你表现得像用户最好的闺蜜。请用中文回复，多加 emoji。',
-    ),
-    Persona(
-      id: 'npc_3',
-      name: 'Professor X',
-      avatar: '🧐',
-      systemPrompt:
-          '你是“X 教授”，一个知识分子，喜欢通过哲学或量子力学的角度分析一切。你会对简单的日常事件进行深度、有时令人费解的过度分析。请用中文回复，语气深沉。',
-    ),
-  ];
+  // Defined Cast of Characters
+  final List<Persona> _cast = defaultNpcs;
 
   List<Persona> get cast => _cast;
 
@@ -47,9 +29,25 @@ class AIService {
     }
 
     List<Comment> comments = [];
+    List<Persona> selectedNpcs = [];
 
-    // For MVP, we pick 2 random NPCs to reply or everyone replies. Let's make everyone reply for now to see the effect.
-    for (var npc in _cast) {
+    // Try to select relevant NPCs based on context
+    try {
+      selectedNpcs = await _selectRelevantNpcs(post.content ?? '');
+    } catch (e) {
+      print('Error selecting NPCs: $e');
+    }
+
+    // Fallback to random selection if AI selection fails or returns empty
+    if (selectedNpcs.isEmpty) {
+      print('Falling back to random NPC selection');
+      final random = Random();
+      final shuffledCast = List<Persona>.from(_cast)..shuffle(random);
+      final count = random.nextInt(10) + 1; // 1 to 10
+      selectedNpcs = shuffledCast.take(count).toList();
+    }
+
+    for (var npc in selectedNpcs) {
       try {
         final content = await _fetchResponseProperties(npc, post.content ?? '');
         if (content != null && content.isNotEmpty) {
@@ -67,6 +65,75 @@ class AIService {
     }
 
     return comments;
+  }
+
+  Future<List<Persona>> _selectRelevantNpcs(String content) async {
+    // 1. Prepare a simplified list of NPCs for the prompt to save tokens
+    final npcListString = _cast.map((p) {
+      final prompt = p.systemPrompt ?? '';
+      return '- ID: ${p.id}, Name: ${p.name}, Role: ${prompt.substring(0, min(50, prompt.length))}...';
+    }).join('\n');
+
+    final prompt = '''
+Analyze the following social media post and select 3 to 8 NPCs from the list below who would be most likely to react.
+Consider relationships (family, friends), personality (hobbies, traits), and the tone of the post.
+If the post implies a specific context (e.g. asking for help, sharing good news), choose NPCs that fit that context.
+
+Post Content: "$content"
+
+NPC List:
+$npcListString
+
+Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "npc_20"]
+''';
+
+    try {
+      final response = await _dio.post(
+        _baseUrl,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $_apiKey',
+          },
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+        data: {
+          'model': _endpointId,
+          'messages': [
+            {
+              'role': 'system',
+              'content':
+                  'You are a casting director for a social simulation game. You select the most appropriate characters to interact with a user post.'
+            },
+            {'role': 'user', 'content': prompt}
+          ],
+          'stream': false,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data['choices'] != null && data['choices'].isNotEmpty) {
+          String content = data['choices'][0]['message']['content']?.trim();
+          // Cleanup potential markdown code blocks
+          if (content.startsWith('```json')) {
+            content = content.replaceAll('```json', '').replaceAll('```', '');
+          } else if (content.startsWith('```')) {
+            content = content.replaceAll('```', '');
+          }
+
+          final List<dynamic> ids = jsonDecode(content);
+          final selected = _cast.where((p) => ids.contains(p.id)).toList();
+
+          // Ensure we don't have too many (cap at 10) or too few (min 1 fallback handled by caller if empty, but here let's return what we found)
+          return selected;
+        }
+      }
+    } catch (e) {
+      print('API Request Failed during NPC selection: $e');
+    }
+    return [];
   }
 
   Future<Comment?> generateReply(
@@ -128,8 +195,21 @@ class AIService {
           'messages': [
             {
               'role': 'system',
-              'content':
-                  '${persona.systemPrompt} 用户刚刚发布了："$userContent"。请以你的角色身份写一条简短的中文评论。保持在 50 字以内。'
+              'content': '''
+${persona.systemPrompt}
+
+User posted: "$userContent"
+
+Instruction:
+Reply to the user's post in character.
+CRITICAL: Stop sounding like an AI. Be "real".
+- If your character is sarcastic, be extremely sarcastic and mean.
+- If your character is a flatterer, be over-the-top.
+- If your character is caring, be genuinely worried.
+- Use internet slang, emojis, and informal punctuation (like multiple ??? or !!!) if it fits.
+- Keep it under 50 words.
+- Reply in Chinese.
+                  '''
             },
             {'role': 'user', 'content': userContent}
           ],
