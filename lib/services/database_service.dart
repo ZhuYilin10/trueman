@@ -10,10 +10,17 @@ class DatabaseService {
   factory DatabaseService() => _instance;
   DatabaseService._internal();
 
+  Isar get isar => _isar;
+
   Future<void> init() async {
+    if (Isar.instanceNames.contains('default')) {
+      _isar = Isar.getInstance('default')!;
+      return;
+    }
+
     final dir = await getApplicationDocumentsDirectory();
     _isar = await Isar.open(
-      [PostSchema],
+      [PostSchema, SimulationEventSchema],
       directory: dir.path,
     );
   }

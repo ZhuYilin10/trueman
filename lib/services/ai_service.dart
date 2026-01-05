@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:trueman/data/models.dart';
 import 'package:trueman/data/default_npcs.dart';
 import 'package:uuid/uuid.dart';
+import 'package:trueman/services/simulation_service.dart';
 
 class AIService {
   // TODO: Replace with your actual Doubao (Volcengine) API Key and Endpoint ID
@@ -21,50 +22,88 @@ class AIService {
 
   List<Persona> get cast => _cast;
 
-  Future<List<Comment>> generateComments(Post post) async {
+  Future<void> planInteraction(Post post) async {
     // If keys are not set, use mock data
     if (_apiKey == 'YOUR_API_KEY_HERE' ||
         _endpointId == 'YOUR_ENDPOINT_ID_HERE') {
-      return _generateMockComments(post);
+      await _scheduleMockComments(post);
+      return;
     }
 
-    List<Comment> comments = [];
+    print('[AIService] Planning interaction for post: ${post.uuid}');
+
     List<Persona> selectedNpcs = [];
 
     // Try to select relevant NPCs based on context
     try {
+      print('[AIService] Requesting cloud AI to select NPCs...');
       selectedNpcs = await _selectRelevantNpcs(post.content ?? '');
+      print(
+          '[AIService] Cloud AI selected ${selectedNpcs.length} NPCs: ${selectedNpcs.map((p) => p.name).join(', ')}');
     } catch (e) {
-      print('Error selecting NPCs: $e');
+      print('[AIService] Error selecting NPCs: $e');
     }
 
-    // Fallback to random selection if AI selection fails or returns empty
+    // Fallback to random NPC selection
     if (selectedNpcs.isEmpty) {
-      print('Falling back to random NPC selection');
+      print(
+          '[AIService] No NPCs selected by AI (or API failed), falling back to random selection.');
       final random = Random();
       final shuffledCast = List<Persona>.from(_cast)..shuffle(random);
       final count = random.nextInt(10) + 1; // 1 to 10
       selectedNpcs = shuffledCast.take(count).toList();
+      print(
+          '[AIService] Randomly selected ${selectedNpcs.length} NPCs: ${selectedNpcs.map((p) => p.name).join(', ')}');
     }
 
+    final simService = SimulationService();
+    final random = Random();
+
+    // Generate and schedule for each NPC
     for (var npc in selectedNpcs) {
+      // Don't await generation sequentially, fire and forget (or parallelize) to not block UI
+      // But here we are in an async method called by provider, so it's fine.
+      // Better to stagger generation so we don't hit rate limits?
+      // Let's generate content now, but schedule for later.
+
       try {
+        print('[AIService] Generating comment content for ${npc.name}...');
         final content = await _fetchResponseProperties(npc, post.content ?? '');
+
         if (content != null && content.isNotEmpty) {
-          comments.add(Comment(
+          print('[AIService] Content generated for ${npc.name}: "$content"');
+          final comment = Comment(
             id: const Uuid().v4(),
             postId: post.uuid,
             author: npc,
             content: content,
-            timestamp: DateTime.now(),
-          ));
+            timestamp:
+                DateTime.now(), // Will be updated/used by SimulationService
+          );
+
+          // Calculate delay: Random between 10 seconds and 2 hours (or shorter for demo)
+          // Demo mode: 5 seconds to 30 seconds
+          final delaySeconds = 5 + random.nextInt(25);
+          final targetTime =
+              DateTime.now().add(Duration(seconds: delaySeconds));
+          print(
+              '[AIService] Scheduling comment for ${npc.name} in $delaySeconds seconds (at $targetTime).');
+
+          await simService.scheduleComment(
+              post.uuid, comment, Duration(seconds: delaySeconds));
+        } else {
+          // Fallback if content generation returns null (e.g. API error inside fetch)
+          // Only do this for the first few to avoid spamming fails
+          // Actually, better to catch at the top level if ALL fail.
+          // For now, let's just log.
+          print(
+              '[AIService] Failed to generate content for ${npc.name} (API returned null/empty).');
         }
       } catch (e) {
-        print('Error generating comment for ${npc.name}: $e');
+        print('[AIService] Error planning comment for ${npc.name}: $e');
       }
     }
-
-    return comments;
+    print('[AIService] Interaction planning complete.');
   }
 
   Future<List<Persona>> _selectRelevantNpcs(String content) async {
@@ -136,17 +175,23 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "n
     return [];
   }
 
-  Future<Comment?> generateReply(
+  Future<void> planReply(
       Comment userReply, Comment originalComment, Post post) async {
-    // If keys are not set, return null or mock response
+    // If keys are not set, use mock data
     if (_apiKey == 'YOUR_API_KEY_HERE' ||
         _endpointId == 'YOUR_ENDPOINT_ID_HERE') {
-      // Just mock a reply from the original author
-      return _generateMockReply(userReply, originalComment, post);
+      await _scheduleMockReply(userReply, originalComment, post);
+      return;
     }
 
     final npc = originalComment.author;
-    if (npc == null) return null;
+    if (npc == null) return;
+
+    print(
+        '[AIService] Planning reply from ${npc.name} to user comment: "${userReply.content}"');
+
+    final simService = SimulationService();
+    final random = Random();
 
     try {
       // Construct context for the AI
@@ -158,10 +203,14 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "n
       ];
 
       final prompt = contextParts.join("\n");
+
+      print('[AIService] Generating reply content for ${npc.name}...');
       final content = await _fetchResponseProperties(npc, prompt);
 
       if (content != null && content.isNotEmpty) {
-        return Comment(
+        print('[AIService] Reply content generated: "$content"');
+
+        final comment = Comment(
           id: const Uuid().v4(),
           postId: post.uuid,
           author: npc,
@@ -169,12 +218,23 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "n
           timestamp: DateTime.now(),
           replyToName: userReply.author?.name,
         );
+
+        // Replies should be faster than initial comments to feel like a "chat"
+        // Demo mode: 2 seconds to 15 seconds
+        final delaySeconds = 2 + random.nextInt(13);
+        final targetTime = DateTime.now().add(Duration(seconds: delaySeconds));
+        print(
+            '[AIService] Scheduling reply for ${npc.name} in $delaySeconds seconds (at $targetTime).');
+
+        await simService.scheduleComment(
+            post.uuid, comment, Duration(seconds: delaySeconds));
+      } else {
+        print(
+            '[AIService] Failed to generate reply for ${npc.name} (API returned null/empty).');
       }
     } catch (e) {
-      print('Error generating reply for ${npc.name}: $e');
+      print('[AIService] Error planning reply for ${npc.name}: $e');
     }
-
-    return null;
   }
 
   Future<String?> _fetchResponseProperties(
@@ -229,35 +289,46 @@ CRITICAL: Stop sounding like an AI. Be "real".
     return null;
   }
 
-  Future<List<Comment>> _generateMockComments(Post post) async {
-    await Future.delayed(const Duration(seconds: 2)); // Simulate network delay
-    return [
+  Future<void> _scheduleMockComments(Post post) async {
+    final simService = SimulationService();
+    final random = Random();
+
+    // Mock 1: Cynical Neighbor in 5 seconds
+    await simService.scheduleComment(
+      post.uuid,
       Comment(
         id: const Uuid().v4(),
         postId: post.uuid,
         author: _cast[0],
-        content:
-            "[MOCK] Hmph, posting again? Don't you have work to do? (Set API Key to see real AI)",
+        content: "[MOCK] Hmph, posting again? (Set API Key)",
         timestamp: DateTime.now(),
       ),
+      Duration(seconds: 5 + random.nextInt(5)),
+    );
+
+    // Mock 2: Gen Z Bestie in 15 seconds
+    await simService.scheduleComment(
+      post.uuid,
       Comment(
         id: const Uuid().v4(),
         postId: post.uuid,
         author: _cast[1],
-        content:
-            "[MOCK] OMG slayyy! bestie this is amazing! ✨💖 (Set API Key to see real AI)",
-        timestamp: DateTime.now().add(const Duration(seconds: 1)),
+        content: "[MOCK] OMG slayyy! ✨ (Set API Key)",
+        timestamp: DateTime.now(),
       ),
-    ];
+      Duration(seconds: 15 + random.nextInt(10)),
+    );
   }
 
-  Future<Comment?> _generateMockReply(
+  Future<void> _scheduleMockReply(
       Comment userReply, Comment originalComment, Post post) async {
-    await Future.delayed(const Duration(seconds: 2));
+    final simService = SimulationService();
     final npc = originalComment.author;
-    if (npc == null) return null;
+    if (npc == null) return;
 
-    return Comment(
+    print('[AIService] Scheduling MOCK reply from ${npc.name}');
+
+    final comment = Comment(
       id: const Uuid().v4(),
       postId: post.uuid,
       author: npc,
@@ -265,5 +336,8 @@ CRITICAL: Stop sounding like an AI. Be "real".
       timestamp: DateTime.now(),
       replyToName: userReply.author?.name,
     );
+
+    await simService.scheduleComment(
+        post.uuid, comment, const Duration(seconds: 3));
   }
 }

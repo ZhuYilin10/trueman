@@ -4,21 +4,23 @@ import 'package:provider/provider.dart';
 import 'package:trueman/data/models.dart';
 import 'package:trueman/services/ai_service.dart';
 import 'package:trueman/services/database_service.dart';
+import 'package:trueman/services/simulation_service.dart';
 import 'package:uuid/uuid.dart';
 
 // --- State Management ---
 class FeedProvider extends ChangeNotifier {
+  final SimulationService _simService = SimulationService();
   final AIService _aiService = AIService();
   final DatabaseService _dbService = DatabaseService();
   List<Post> _posts = [];
-  bool _isGenerating = false;
+  // No longer blocking UI
 
   FeedProvider() {
     _init();
   }
 
   List<Post> get posts => List.unmodifiable(_posts);
-  bool get isGenerating => _isGenerating;
+  bool get isGenerating => false; // Always false in background mode
   Comment? get replyingToComment => _replyingToComment;
 
   Comment? _replyingToComment;
@@ -32,7 +34,31 @@ class FeedProvider extends ChangeNotifier {
 
   Future<void> _init() async {
     await _dbService.init();
+    await _simService.init(); // Initialize simulation loop
+
+    // Listen for new events from simulation
+    _simService.onEventProcessed.listen((event) {
+      if (event.type == 'comment_reply') {
+        _handleNewCommentEvent(event);
+      }
+    });
+
     _posts = await _dbService.getAllPosts();
+    notifyListeners();
+  }
+
+  void _handleNewCommentEvent(SimulationEvent event) async {
+    print('[FeedProvider] Received new comment event: ${event.uuid}');
+    // Refresh posts from DB to get the latest state including the new comment
+    // Optimization: Could just find the post in memory and add it, but refreshing is safer for consistency
+    _posts = await _dbService.getAllPosts();
+    print('[FeedProvider] Refreshed posts. Count: ${_posts.length}');
+    if (_posts.isNotEmpty) {
+      final post = _posts.firstWhere((p) => p.uuid == event.targetId,
+          orElse: () => _posts.first);
+      print(
+          '[FeedProvider] Target post comments count: ${post.comments?.length ?? 0}');
+    }
     notifyListeners();
   }
 
@@ -51,24 +77,8 @@ class FeedProvider extends ChangeNotifier {
     _posts.insert(0, newPost);
     notifyListeners();
 
-    _isGenerating = true;
-    notifyListeners();
-
-    // Trigger AI Responses
-    final comments = await _aiService.generateComments(newPost);
-
-    // Update post with comments
-    if (newPost.comments == null) {
-      newPost.comments = comments;
-    } else {
-      newPost.comments!.addAll(comments);
-    }
-
-    // Save update to DB
-    await _dbService.updatePost(newPost);
-
-    _isGenerating = false;
-    notifyListeners();
+    // Trigger AI Planning (Background)
+    _aiService.planInteraction(newPost);
   }
 
   void setReplyTo(Comment? comment) {
@@ -104,23 +114,14 @@ class FeedProvider extends ChangeNotifier {
 
     // Clear reply state immediately
     _replyingToComment = null;
-    _isGenerating = true;
     notifyListeners();
 
     // Save user comment
     await _dbService.updatePost(post);
 
-    // AI Reply
-    final reply =
-        await _aiService.generateReply(userComment, targetComment, post);
-
-    if (reply != null) {
-      post.comments = List.from(post.comments!)..add(reply);
-      await _dbService.updatePost(post);
-    }
-
-    _isGenerating = false;
-    notifyListeners();
+    // AI Reply logic
+    // Fire and forget, don't await because planReply is async and we don't want to block UI or wait for it
+    _aiService.planReply(userComment, targetComment, post);
   }
 }
 
@@ -170,7 +171,11 @@ class HomeView extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   itemCount: feed.posts.length,
                   itemBuilder: (context, index) {
-                    return PostItem(post: feed.posts[index]);
+                    final post = feed.posts[index];
+                    return PostItem(
+                        key: ValueKey(
+                            '${post.uuid}_${post.comments?.length ?? 0}'),
+                        post: post);
                   },
                 );
               },
@@ -200,6 +205,19 @@ class PostItem extends StatelessWidget {
     final authorName = post.author?.name ?? 'Unknown';
     final authorAvatar = post.author?.avatar ?? '?';
     final comments = post.comments ?? [];
+
+    print(
+        '[PostItem] Building post ${post.uuid} with ${comments.length} comments');
+
+    // Detailed dump to debug missing render
+    for (var i = 0; i < comments.length; i++) {
+      final c = comments[i];
+      // Debug: print index and start of content
+      final preview = (c.content != null && c.content!.length > 5)
+          ? c.content!.substring(0, 5)
+          : c.content;
+      print('[PostItem] Comment $i: $preview (Author: ${c.author?.name})');
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -259,6 +277,15 @@ class CommentItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final authorName = comment.author?.name ?? 'Unknown';
     final authorAvatar = comment.author?.avatar ?? '?';
+
+    // Debug log to see if this specific comment is rendering
+    // print('[CommentItem] Rendering comment: "${comment.content}" from $authorName');
+
+    // Only print if it's the specific target reply to reduce noise, or just print last few?
+    // Let's print simplified version
+    if (comment.content != null && comment.content!.length > 10) {
+      print('[CommentItem] Rendering: ${comment.content!.substring(0, 10)}...');
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
