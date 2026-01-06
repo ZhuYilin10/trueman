@@ -41,6 +41,13 @@ class FeedProvider extends ChangeNotifier {
     });
 
     _posts = await _dbService.getAllPosts();
+    // Sort comments initially too
+    for (var post in _posts) {
+      if (post.comments != null && post.comments!.isNotEmpty) {
+        post.comments!.sort((a, b) =>
+            (a.timestamp ?? DateTime(0)).compareTo(b.timestamp ?? DateTime(0)));
+      }
+    }
     notifyListeners();
   }
 
@@ -49,6 +56,15 @@ class FeedProvider extends ChangeNotifier {
     // Refresh posts from DB to get the latest state including the new comment
     // Optimization: Could just find the post in memory and add it, but refreshing is safer for consistency
     _posts = await _dbService.getAllPosts();
+
+    // Explicitly sort comments for all posts (or just the target one)
+    for (var post in _posts) {
+      if (post.comments != null && post.comments!.isNotEmpty) {
+        post.comments!.sort((a, b) =>
+            (a.timestamp ?? DateTime(0)).compareTo(b.timestamp ?? DateTime(0)));
+      }
+    }
+
     print('[FeedProvider] Refreshed posts. Count: ${_posts.length}');
     if (_posts.isNotEmpty) {
       final post = _posts.firstWhere((p) => p.uuid == event.targetId,

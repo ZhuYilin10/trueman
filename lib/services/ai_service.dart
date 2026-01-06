@@ -74,6 +74,10 @@ class AIService {
 
           await _simService.scheduleComment(
               post.uuid, comment, Duration(seconds: delaySeconds));
+
+          // Trigger chain reaction!
+          // Let other NPCs see this initial comment and potentially react
+          _triggerChainReaction(comment, post, parentDelay: delaySeconds);
         } else {
           print(
               '[AIService] Failed to generate content for ${npc.name} (API returned null/empty).');
@@ -208,22 +212,36 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5"]
     final npc = originalComment.author;
     if (npc == null) return;
 
+    // Check depth limit
+    if (userReply.depth >= 5) {
+      print(
+          '[AIService] Max conversation depth reached (${userReply.depth}). Stopping recursion.');
+      return;
+    }
+
     // final simService = SimulationService(); // using _simService
     final random = Random();
 
     try {
       // Construct context for the AI
+      // Decide if we are replying to a user or another NPC
+      final replyTargetName = userReply.author?.name ?? "User";
+
       final contextParts = [
-        "Previous conversation:",
-        "User posted: \"${post.content}\"",
-        "${npc.name} commented: \"${originalComment.content}\"",
-        "User replied to ${npc.name}: \"${userReply.content}\""
+        "Conversation Context:",
+        "Original Post by User: \"${post.content}\"",
+        "HISTORY:",
+        "...(omitted previous turns)...",
+        "${replyTargetName} said: \"${userReply.content}\"",
+        "Instruction: You are ${npc.name}. Reply to ${replyTargetName}.",
       ];
 
       final prompt = contextParts.join("\n");
 
-      print('[AIService] Generating reply content for ${npc.name}...');
-      final content = await _fetchResponseProperties(npc, prompt);
+      print(
+          '[AIService] Generating reply for ${npc.name} at depth ${userReply.depth + 1}...');
+      final content = await _fetchResponseProperties(
+          npc, prompt); // Simplified prompt usage
 
       if (content != null && content.isNotEmpty) {
         final comment = Comment(
@@ -233,14 +251,148 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5"]
           content: content,
           timestamp: DateTime.now(),
           replyToName: userReply.author?.name,
+          depth: userReply.depth + 1,
         );
 
-        final delaySeconds = 2 + random.nextInt(13);
+        final delaySeconds = 2 + random.nextInt(10);
         await _simService.scheduleComment(
             post.uuid, comment, Duration(seconds: delaySeconds));
+
+        // Trigger chain reaction from OTHER NPCs
+        // This comment might annoy someone else!
+        await _triggerChainReaction(comment, post, parentDelay: delaySeconds);
       }
     } catch (e) {
       print('[AIService] Error planning reply for ${npc.name}: $e');
+    }
+  }
+
+  Future<void> _triggerChainReaction(Comment triggerComment, Post post,
+      {int parentDelay = 0}) async {
+    // 1. Check max depth
+    if (triggerComment.depth >= 5) return;
+
+    final random = Random();
+
+    // Reduce fan-out: Only check 1 to 2 candidates max (was 3-5)
+    // This dramatically reduces exponential growth.
+    int candidateCount = 1 + random.nextInt(2);
+
+    List<Persona> candidates = [];
+
+    // 2. Vector-based Selection
+    try {
+      final triggerEmbedding =
+          await _getEmbedding(triggerComment.content ?? "");
+
+      if (triggerEmbedding != null) {
+        // Calculate scores for all NPCs
+        List<MapEntry<Persona, double>> scoredNpcs = [];
+        for (var p in _cast) {
+          // Skip self
+          if (p.id == triggerComment.author?.id) continue;
+
+          // Lazy load embedding if needed
+          if (p.embedding == null) {
+            p.embedding = await _getEmbedding(p.systemPrompt ?? p.name ?? '');
+          }
+
+          if (p.embedding != null) {
+            double score = _cosineSimilarity(triggerEmbedding, p.embedding!);
+            scoredNpcs.add(MapEntry(p, score));
+          }
+        }
+
+        // Sort by similarity descending
+        scoredNpcs.sort((a, b) => b.value.compareTo(a.value));
+
+        // Weighted Selection / Top-K + Random
+        // Strategy: Take top 10 most relevant, then randomly pick 2 from them.
+        final topPool = scoredNpcs.take(10).map((e) => e.key).toList();
+        topPool.shuffle(random);
+        candidates = topPool.take(candidateCount).toList();
+
+        print(
+            '[AIService] Vector selection found ${candidates.length} relevant candidates from top 10.');
+      }
+    } catch (e) {
+      print('[AIService] Vector selection failed, falling back to random: $e');
+    }
+
+    // Fallback to pure random if vector search failed or returned nothing
+    if (candidates.isEmpty) {
+      final potentialCandidates = List<Persona>.from(_cast)..shuffle(random);
+      candidates = potentialCandidates.take(candidateCount).toList();
+    }
+
+    print(
+        '[AIService] Checking if any of ${candidates.length} NPCs want to reply to ${triggerComment.author?.name}...');
+
+    for (var candidate in candidates) {
+      // Double check self-reply
+      if (candidate.id == triggerComment.author?.id) continue;
+
+      // 3. Probability check (Decreases with depth)
+      // Base chance 30% (was 60%) to prevent explosion
+      // Formula: 0.3 / (depth + 1) -> 30%, 15%, 10%, 7%...
+      double chance = 0.3 / (triggerComment.depth + 1);
+
+      if (random.nextDouble() < chance) {
+        print(
+            '[AIService] ${candidate.name} decided to jump in! (Chance: ${(chance * 100).toStringAsFixed(0)}%)');
+
+        // Schedule their reply logic
+        _planNpcToNpcReply(candidate, triggerComment, post,
+            parentDelay: parentDelay);
+      }
+    }
+  }
+
+  Future<void> _planNpcToNpcReply(Persona me, Comment targetComment, Post post,
+      {int parentDelay = 0}) async {
+    try {
+      final prompt = '''
+Conversation Context:
+User's Original Post: "${post.content}"
+...
+${targetComment.author?.name} just said: "${targetComment.content}"
+
+Your Task:
+You are ${me.name}.
+You heard what ${targetComment.author?.name} said.
+Reply to THEM directly.
+${me.systemPrompt}
+Keep it short, conversational, and in character.
+''';
+
+      final content = await _llmService.chatCompletion(
+          systemPrompt: "You are ${me.name}. Reply to the comment.",
+          userMessage: prompt);
+
+      if (content != null && content.isNotEmpty) {
+        final random = Random();
+        final comment = Comment(
+          id: const Uuid().v4(),
+          postId: post.uuid,
+          author: me,
+          content: content,
+          timestamp: DateTime.now(),
+          replyToName: targetComment.author?.name,
+          depth: targetComment.depth + 1,
+        );
+
+        // Give it a bit of delay so they don't appear instantly
+        // Ensure child appears AFTER parent (parentDelay + small buffer + random)
+        final myDelay = parentDelay + 3 + random.nextInt(10);
+
+        await _simService.scheduleComment(
+            post.uuid, comment, Duration(seconds: myDelay));
+
+        // Recursion: This new comment might trigger SOMEONE ELSE
+        await _triggerChainReaction(comment, post, parentDelay: myDelay);
+      }
+    } catch (e) {
+      print('Error in NPC-to-NPC reply: $e');
     }
   }
 

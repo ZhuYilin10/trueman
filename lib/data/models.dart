@@ -15,8 +15,8 @@ class Persona {
   List<double>? embedding;
 
   Persona({
-    required this.id,
-    required this.name,
+    this.id,
+    this.name,
     this.avatar,
     this.systemPrompt,
     this.embedding,
@@ -32,6 +32,8 @@ class Comment {
   DateTime? timestamp;
   String? replyToName;
 
+  int depth;
+
   Comment({
     this.id,
     this.postId,
@@ -39,6 +41,7 @@ class Comment {
     this.content,
     this.timestamp,
     this.replyToName,
+    this.depth = 0,
   });
 }
 

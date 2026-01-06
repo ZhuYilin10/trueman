@@ -2367,18 +2367,23 @@ const PersonaSchema = Schema(
       name: r'avatar',
       type: IsarType.string,
     ),
-    r'id': PropertySchema(
+    r'embedding': PropertySchema(
       id: 1,
+      name: r'embedding',
+      type: IsarType.doubleList,
+    ),
+    r'id': PropertySchema(
+      id: 2,
       name: r'id',
       type: IsarType.string,
     ),
     r'name': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'name',
       type: IsarType.string,
     ),
     r'systemPrompt': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'systemPrompt',
       type: IsarType.string,
     )
@@ -2399,6 +2404,12 @@ int _personaEstimateSize(
     final value = object.avatar;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.embedding;
+    if (value != null) {
+      bytesCount += 3 + value.length * 8;
     }
   }
   {
@@ -2429,9 +2440,10 @@ void _personaSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.avatar);
-  writer.writeString(offsets[1], object.id);
-  writer.writeString(offsets[2], object.name);
-  writer.writeString(offsets[3], object.systemPrompt);
+  writer.writeDoubleList(offsets[1], object.embedding);
+  writer.writeString(offsets[2], object.id);
+  writer.writeString(offsets[3], object.name);
+  writer.writeString(offsets[4], object.systemPrompt);
 }
 
 Persona _personaDeserialize(
@@ -2442,9 +2454,10 @@ Persona _personaDeserialize(
 ) {
   final object = Persona(
     avatar: reader.readStringOrNull(offsets[0]),
-    id: reader.readStringOrNull(offsets[1]),
-    name: reader.readStringOrNull(offsets[2]),
-    systemPrompt: reader.readStringOrNull(offsets[3]),
+    embedding: reader.readDoubleList(offsets[1]),
+    id: reader.readStringOrNull(offsets[2]),
+    name: reader.readStringOrNull(offsets[3]),
+    systemPrompt: reader.readStringOrNull(offsets[4]),
   );
   return object;
 }
@@ -2459,10 +2472,12 @@ P _personaDeserializeProp<P>(
     case 0:
       return (reader.readStringOrNull(offset)) as P;
     case 1:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleList(offset)) as P;
     case 2:
       return (reader.readStringOrNull(offset)) as P;
     case 3:
+      return (reader.readStringOrNull(offset)) as P;
+    case 4:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -2614,6 +2629,171 @@ extension PersonaQueryFilter
         property: r'avatar',
         value: '',
       ));
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'embedding',
+      ));
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'embedding',
+      ));
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingElementEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'embedding',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition>
+      embeddingElementGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'embedding',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition>
+      embeddingElementLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'embedding',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingElementBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'embedding',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingLengthEqualTo(
+      int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'embedding',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'embedding',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'embedding',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'embedding',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition>
+      embeddingLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'embedding',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<Persona, Persona, QAfterFilterCondition> embeddingLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'embedding',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 
@@ -3078,23 +3258,28 @@ const CommentSchema = Schema(
       name: r'content',
       type: IsarType.string,
     ),
-    r'id': PropertySchema(
+    r'depth': PropertySchema(
       id: 2,
+      name: r'depth',
+      type: IsarType.long,
+    ),
+    r'id': PropertySchema(
+      id: 3,
       name: r'id',
       type: IsarType.string,
     ),
     r'postId': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'postId',
       type: IsarType.string,
     ),
     r'replyToName': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'replyToName',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'timestamp',
       type: IsarType.dateTime,
     )
@@ -3158,10 +3343,11 @@ void _commentSerialize(
     object.author,
   );
   writer.writeString(offsets[1], object.content);
-  writer.writeString(offsets[2], object.id);
-  writer.writeString(offsets[3], object.postId);
-  writer.writeString(offsets[4], object.replyToName);
-  writer.writeDateTime(offsets[5], object.timestamp);
+  writer.writeLong(offsets[2], object.depth);
+  writer.writeString(offsets[3], object.id);
+  writer.writeString(offsets[4], object.postId);
+  writer.writeString(offsets[5], object.replyToName);
+  writer.writeDateTime(offsets[6], object.timestamp);
 }
 
 Comment _commentDeserialize(
@@ -3177,10 +3363,11 @@ Comment _commentDeserialize(
       allOffsets,
     ),
     content: reader.readStringOrNull(offsets[1]),
-    id: reader.readStringOrNull(offsets[2]),
-    postId: reader.readStringOrNull(offsets[3]),
-    replyToName: reader.readStringOrNull(offsets[4]),
-    timestamp: reader.readDateTimeOrNull(offsets[5]),
+    depth: reader.readLongOrNull(offsets[2]) ?? 0,
+    id: reader.readStringOrNull(offsets[3]),
+    postId: reader.readStringOrNull(offsets[4]),
+    replyToName: reader.readStringOrNull(offsets[5]),
+    timestamp: reader.readDateTimeOrNull(offsets[6]),
   );
   return object;
 }
@@ -3201,12 +3388,14 @@ P _commentDeserializeProp<P>(
     case 1:
       return (reader.readStringOrNull(offset)) as P;
     case 2:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset) ?? 0) as P;
     case 3:
       return (reader.readStringOrNull(offset)) as P;
     case 4:
       return (reader.readStringOrNull(offset)) as P;
     case 5:
+      return (reader.readStringOrNull(offset)) as P;
+    case 6:
       return (reader.readDateTimeOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3373,6 +3562,59 @@ extension CommentQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'content',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Comment, Comment, QAfterFilterCondition> depthEqualTo(
+      int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'depth',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Comment, Comment, QAfterFilterCondition> depthGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'depth',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Comment, Comment, QAfterFilterCondition> depthLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'depth',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Comment, Comment, QAfterFilterCondition> depthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'depth',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
       ));
     });
   }

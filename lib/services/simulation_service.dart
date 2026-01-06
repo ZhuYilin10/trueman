@@ -115,6 +115,11 @@ class SimulationService {
 
     if (dueEvents.isEmpty) return;
 
+    // Critical: Sort by scheduledTime to ensure parents are processed before children
+    // if both fall into the same processing window.
+    dueEvents.sort(
+        (a, b) => (a.scheduledTime ?? now).compareTo(b.scheduledTime ?? now));
+
     List<SimulationEvent> processedEvents = [];
 
     await isar.writeTxn(() async {
