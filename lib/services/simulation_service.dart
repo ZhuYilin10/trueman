@@ -74,20 +74,26 @@ class SimulationService {
           '[SimulationService] Found ${missedEvents.length} missed events. Processing...');
 
       // Sort by time
+      // Sort by time
       missedEvents.sort(
           (a, b) => (a.scheduledTime ?? now).compareTo(b.scheduledTime ?? now));
 
-      for (var event in missedEvents) {
-        print('[SimulationService] Catch-up processing event: ${event.uuid}');
-        await _applyEventEffect(event);
-        event.isProcessed = true;
-        // Notify UI
-        _eventStreamController.add(event);
-      }
+      List<SimulationEvent> processedEvents = [];
 
       await _dbService.isar.writeTxn(() async {
-        await _dbService.isar.simulationEvents.putAll(missedEvents);
+        for (var event in missedEvents) {
+          print('[SimulationService] Catch-up processing event: ${event.uuid}');
+          await _applyEventEffect(event);
+          event.isProcessed = true;
+          await _dbService.isar.simulationEvents.put(event);
+          processedEvents.add(event);
+        }
       });
+
+      // Notify UI after commit
+      for (var event in processedEvents) {
+        _eventStreamController.add(event);
+      }
 
       print('[SimulationService] Missed events processed.');
     } else {
@@ -109,6 +115,8 @@ class SimulationService {
 
     if (dueEvents.isEmpty) return;
 
+    List<SimulationEvent> processedEvents = [];
+
     await isar.writeTxn(() async {
       for (var event in dueEvents) {
         event.isProcessed = true;
@@ -120,10 +128,14 @@ class SimulationService {
         debugPrint(
             'Processed event: ${event.type} for ${event.targetId} from ${event.payloadComment?.author?.name}');
 
-        // Notify UI
-        _eventStreamController.add(event);
+        processedEvents.add(event);
       }
     });
+
+    // Notify UI AFTER transaction commits
+    for (var event in processedEvents) {
+      _eventStreamController.add(event);
+    }
   }
 
   Future<void> _applyEventEffect(SimulationEvent event) async {

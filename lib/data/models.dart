@@ -9,12 +9,17 @@ class Persona {
   String? name;
   String? avatar; // Emoji or asset path
   String? systemPrompt; // Personality description
+  // Embedding vector for vector search
+  // Not persisted in Isar for now (or could be), just in memory is fine.
+  // Actually, let's persist it so we don't re-fetch every restart.
+  List<double>? embedding;
 
   Persona({
-    this.id,
-    this.name,
+    required this.id,
+    required this.name,
     this.avatar,
     this.systemPrompt,
+    this.embedding,
   });
 }
 

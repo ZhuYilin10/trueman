@@ -1,35 +1,25 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:dio/dio.dart';
 import 'package:trueman/data/models.dart';
 import 'package:trueman/data/default_npcs.dart';
 import 'package:uuid/uuid.dart';
 import 'package:trueman/services/simulation_service.dart';
+import 'package:trueman/services/llm_service.dart';
 
 class AIService {
-  // TODO: Replace with your actual Doubao (Volcengine) API Key and Endpoint ID
-  static const String _apiKey = '7380acbd-9067-4433-817a-5e70eb17992a';
-  static const String _endpointId = 'doubao-seed-1-6-251015';
+  final LLMService _llmService;
+  final SimulationService _simService;
 
-  static const String _baseUrl =
-      'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+  AIService({LLMService? llmService, SimulationService? simService})
+      : _llmService = llmService ?? VolcEngineService(),
+        _simService = simService ?? SimulationService();
 
-  final Dio _dio = Dio();
-
-  // Defined Cast of Characters
   // Defined Cast of Characters
   final List<Persona> _cast = defaultNpcs;
 
   List<Persona> get cast => _cast;
 
   Future<void> planInteraction(Post post) async {
-    // If keys are not set, use mock data
-    if (_apiKey == 'YOUR_API_KEY_HERE' ||
-        _endpointId == 'YOUR_ENDPOINT_ID_HERE') {
-      await _scheduleMockComments(post);
-      return;
-    }
-
     print('[AIService] Planning interaction for post: ${post.uuid}');
 
     List<Persona> selectedNpcs = [];
@@ -56,16 +46,11 @@ class AIService {
           '[AIService] Randomly selected ${selectedNpcs.length} NPCs: ${selectedNpcs.map((p) => p.name).join(', ')}');
     }
 
-    final simService = SimulationService();
+    // final simService = SimulationService(); // using _simService
     final random = Random();
 
     // Generate and schedule for each NPC
     for (var npc in selectedNpcs) {
-      // Don't await generation sequentially, fire and forget (or parallelize) to not block UI
-      // But here we are in an async method called by provider, so it's fine.
-      // Better to stagger generation so we don't hit rate limits?
-      // Let's generate content now, but schedule for later.
-
       try {
         print('[AIService] Generating comment content for ${npc.name}...');
         final content = await _fetchResponseProperties(npc, post.content ?? '');
@@ -81,21 +66,15 @@ class AIService {
                 DateTime.now(), // Will be updated/used by SimulationService
           );
 
-          // Calculate delay: Random between 10 seconds and 2 hours (or shorter for demo)
-          // Demo mode: 5 seconds to 30 seconds
           final delaySeconds = 5 + random.nextInt(25);
           final targetTime =
               DateTime.now().add(Duration(seconds: delaySeconds));
           print(
               '[AIService] Scheduling comment for ${npc.name} in $delaySeconds seconds (at $targetTime).');
 
-          await simService.scheduleComment(
+          await _simService.scheduleComment(
               post.uuid, comment, Duration(seconds: delaySeconds));
         } else {
-          // Fallback if content generation returns null (e.g. API error inside fetch)
-          // Only do this for the first few to avoid spamming fails
-          // Actually, better to catch at the top level if ALL fail.
-          // For now, let's just log.
           print(
               '[AIService] Failed to generate content for ${npc.name} (API returned null/empty).');
         }
@@ -106,91 +85,130 @@ class AIService {
     print('[AIService] Interaction planning complete.');
   }
 
+  /// Cache for embeddings to avoid re-fetching
+  final Map<String, List<double>> _embeddingCache = {};
+
+  Future<List<double>?> _getEmbedding(String text) async {
+    if (_embeddingCache.containsKey(text)) {
+      return _embeddingCache[text];
+    }
+    final embedding = await _llmService.getEmbedding(text);
+    if (embedding != null) {
+      _embeddingCache[text] = embedding;
+    }
+    return embedding;
+  }
+
+  double _cosineSimilarity(List<double> a, List<double> b) {
+    if (a.length != b.length) return 0.0;
+    double dotProduct = 0.0;
+    double normA = 0.0;
+    double normB = 0.0;
+    for (int i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    if (normA == 0 || normB == 0) return 0.0;
+    return dotProduct / (sqrt(normA) * sqrt(normB));
+  }
+
   Future<List<Persona>> _selectRelevantNpcs(String content) async {
-    // 1. Prepare a simplified list of NPCs for the prompt to save tokens
-    final npcListString = _cast.map((p) {
+    // 1. Initialize NPC embeddings
+    int initializedCount = 0;
+    for (var p in _cast) {
+      if (p.embedding == null) {
+        final embed = await _getEmbedding(p.systemPrompt ?? p.name ?? '');
+        p.embedding = embed;
+        if (embed != null) initializedCount++;
+      }
+    }
+
+    if (initializedCount > 0) {
+      print(
+          '[AIService] Initialized/Fetched $initializedCount NPC embeddings.');
+    }
+
+    // 2. Get embedding for the post content
+    final postEmbedding = await _getEmbedding(content);
+
+    if (postEmbedding == null) {
+      return [];
+    }
+
+    // 3. Calculate Cosine Similarity
+    List<MapEntry<Persona, double>> scoredNpcs = [];
+
+    for (var p in _cast) {
+      if (p.embedding != null) {
+        final score = _cosineSimilarity(postEmbedding, p.embedding!);
+        scoredNpcs.add(MapEntry(p, score));
+      }
+    }
+
+    scoredNpcs.sort((a, b) => b.value.compareTo(a.value));
+
+    // 4. Select Top N Candidates
+    final topCandidates = scoredNpcs.take(10).map((e) => e.key).toList();
+
+    if (topCandidates.isEmpty) return [];
+
+    // 5. Ask LLM to refine selection
+    final npcListString = topCandidates.map((p) {
       final prompt = p.systemPrompt ?? '';
       return '- ID: ${p.id}, Name: ${p.name}, Role: ${prompt.substring(0, min(50, prompt.length))}...';
     }).join('\n');
 
     final prompt = '''
-Analyze the following social media post and select 3 to 8 NPCs from the list below who would be most likely to react.
-Consider relationships (family, friends), personality (hobbies, traits), and the tone of the post.
-If the post implies a specific context (e.g. asking for help, sharing good news), choose NPCs that fit that context.
+Analyze the following social media post and select 3 to 5 NPCs from the SHORTLIST below who would be most likely to react.
+Consider relationships, personality, and tone.
 
 Post Content: "$content"
 
-NPC List:
+Candidate Shortlist:
 $npcListString
 
-Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "npc_20"]
+Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5"]
 ''';
 
     try {
-      final response = await _dio.post(
-        _baseUrl,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $_apiKey',
-          },
-          sendTimeout: const Duration(seconds: 60),
-          receiveTimeout: const Duration(seconds: 60),
-        ),
-        data: {
-          'model': _endpointId,
-          'messages': [
-            {
-              'role': 'system',
-              'content':
-                  'You are a casting director for a social simulation game. You select the most appropriate characters to interact with a user post.'
-            },
-            {'role': 'user', 'content': prompt}
-          ],
-          'stream': false,
-        },
+      print('[AIService] Sending shortlist to LLM...');
+      String? result = await _llmService.chatCompletion(
+        systemPrompt:
+            'You are a casting director. Pick the best actors from the shortlist.',
+        userMessage: prompt,
       );
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['choices'] != null && data['choices'].isNotEmpty) {
-          String content = data['choices'][0]['message']['content']?.trim();
-          // Cleanup potential markdown code blocks
-          if (content.startsWith('```json')) {
-            content = content.replaceAll('```json', '').replaceAll('```', '');
-          } else if (content.startsWith('```')) {
-            content = content.replaceAll('```', '');
-          }
+      if (result != null) {
+        print('[AIService] LLM Raw Response: $result');
 
-          final List<dynamic> ids = jsonDecode(content);
-          final selected = _cast.where((p) => ids.contains(p.id)).toList();
-
-          // Ensure we don't have too many (cap at 10) or too few (min 1 fallback handled by caller if empty, but here let's return what we found)
-          return selected;
+        if (result.startsWith('```json')) {
+          result = result.replaceAll('```json', '').replaceAll('```', '');
+        } else if (result.startsWith('```')) {
+          result = result.replaceAll('```', '');
         }
+
+        final List<dynamic> ids = jsonDecode(result);
+        final selected =
+            topCandidates.where((p) => ids.contains(p.id)).toList();
+
+        print(
+            '[AIService] Final Selection (${selected.length}): ${selected.map((p) => p.name).join(', ')}');
+        return selected;
       }
     } catch (e) {
-      print('API Request Failed during NPC selection: $e');
+      print('API Request Failed during NPC selection (Refinement): $e');
+      return topCandidates.take(3).toList();
     }
     return [];
   }
 
   Future<void> planReply(
       Comment userReply, Comment originalComment, Post post) async {
-    // If keys are not set, use mock data
-    if (_apiKey == 'YOUR_API_KEY_HERE' ||
-        _endpointId == 'YOUR_ENDPOINT_ID_HERE') {
-      await _scheduleMockReply(userReply, originalComment, post);
-      return;
-    }
-
     final npc = originalComment.author;
     if (npc == null) return;
 
-    print(
-        '[AIService] Planning reply from ${npc.name} to user comment: "${userReply.content}"');
-
-    final simService = SimulationService();
+    // final simService = SimulationService(); // using _simService
     final random = Random();
 
     try {
@@ -208,8 +226,6 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "n
       final content = await _fetchResponseProperties(npc, prompt);
 
       if (content != null && content.isNotEmpty) {
-        print('[AIService] Reply content generated: "$content"');
-
         final comment = Comment(
           id: const Uuid().v4(),
           postId: post.uuid,
@@ -219,18 +235,9 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "n
           replyToName: userReply.author?.name,
         );
 
-        // Replies should be faster than initial comments to feel like a "chat"
-        // Demo mode: 2 seconds to 15 seconds
         final delaySeconds = 2 + random.nextInt(13);
-        final targetTime = DateTime.now().add(Duration(seconds: delaySeconds));
-        print(
-            '[AIService] Scheduling reply for ${npc.name} in $delaySeconds seconds (at $targetTime).');
-
-        await simService.scheduleComment(
+        await _simService.scheduleComment(
             post.uuid, comment, Duration(seconds: delaySeconds));
-      } else {
-        print(
-            '[AIService] Failed to generate reply for ${npc.name} (API returned null/empty).');
       }
     } catch (e) {
       print('[AIService] Error planning reply for ${npc.name}: $e');
@@ -239,23 +246,7 @@ Return ONLY a JSON array of the selected NPC IDs. Example: ["npc_1", "npc_5", "n
 
   Future<String?> _fetchResponseProperties(
       Persona persona, String userContent) async {
-    try {
-      final response = await _dio.post(
-        _baseUrl,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $_apiKey',
-          },
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-        ),
-        data: {
-          'model': _endpointId,
-          'messages': [
-            {
-              'role': 'system',
-              'content': '''
+    final systemPrompt = '''
 ${persona.systemPrompt}
 
 User posted: "$userContent"
@@ -269,75 +260,11 @@ CRITICAL: Stop sounding like an AI. Be "real".
 - Use internet slang, emojis, and informal punctuation (like multiple ??? or !!!) if it fits.
 - Keep it under 50 words.
 - Reply in Chinese.
-                  '''
-            },
-            {'role': 'user', 'content': userContent}
-          ],
-          'stream': false,
-        },
-      );
+''';
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['choices'] != null && data['choices'].isNotEmpty) {
-          return data['choices'][0]['message']['content']?.trim();
-        }
-      }
-    } catch (e) {
-      print('API Request Failed: $e');
-    }
-    return null;
-  }
-
-  Future<void> _scheduleMockComments(Post post) async {
-    final simService = SimulationService();
-    final random = Random();
-
-    // Mock 1: Cynical Neighbor in 5 seconds
-    await simService.scheduleComment(
-      post.uuid,
-      Comment(
-        id: const Uuid().v4(),
-        postId: post.uuid,
-        author: _cast[0],
-        content: "[MOCK] Hmph, posting again? (Set API Key)",
-        timestamp: DateTime.now(),
-      ),
-      Duration(seconds: 5 + random.nextInt(5)),
+    return _llmService.chatCompletion(
+      systemPrompt: systemPrompt,
+      userMessage: userContent,
     );
-
-    // Mock 2: Gen Z Bestie in 15 seconds
-    await simService.scheduleComment(
-      post.uuid,
-      Comment(
-        id: const Uuid().v4(),
-        postId: post.uuid,
-        author: _cast[1],
-        content: "[MOCK] OMG slayyy! ✨ (Set API Key)",
-        timestamp: DateTime.now(),
-      ),
-      Duration(seconds: 15 + random.nextInt(10)),
-    );
-  }
-
-  Future<void> _scheduleMockReply(
-      Comment userReply, Comment originalComment, Post post) async {
-    final simService = SimulationService();
-    final npc = originalComment.author;
-    if (npc == null) return;
-
-    print('[AIService] Scheduling MOCK reply from ${npc.name}');
-
-    final comment = Comment(
-      id: const Uuid().v4(),
-      postId: post.uuid,
-      author: npc,
-      content: "[MOCK Reply] Oh really? Interesting. (Set API Key)",
-      timestamp: DateTime.now(),
-      replyToName: userReply.author?.name,
-    );
-
-    await simService.scheduleComment(
-        post.uuid, comment, const Duration(seconds: 3));
   }
 }
