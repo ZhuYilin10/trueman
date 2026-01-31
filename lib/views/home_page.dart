@@ -114,19 +114,10 @@ class PostItem extends StatelessWidget {
     final authorName = post.author?.name ?? 'Unknown';
     final authorAvatar = post.author?.avatar ?? '?';
     final comments = post.comments ?? [];
-
-    print(
-        '[PostItem] Building post ${post.uuid} with ${comments.length} comments');
-
-    // Detailed dump to debug missing render
-    for (var i = 0; i < comments.length; i++) {
-      final c = comments[i];
-      // Debug: print index and start of content
-      final preview = (c.content != null && c.content!.length > 5)
-          ? c.content!.substring(0, 5)
-          : c.content;
-      print('[PostItem] Comment $i: $preview (Author: ${c.author?.name})');
-    }
+    final likes = post.likes ?? [];
+    final provider = context.read<FeedProvider>();
+    final isLiked = provider.isLiked(post);
+    final likeCount = likes.length;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -160,7 +151,54 @@ class PostItem extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(post.content ?? '', style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            // 点赞和评论按钮
+            Row(
+              children: [
+                // 点赞按钮
+                GestureDetector(
+                  onTap: () => provider.toggleLike(post.uuid),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isLiked ? Icons.favorite : Icons.favorite_border,
+                        size: 20,
+                        color: isLiked ? Colors.red : Colors.grey[600],
+                      ),
+                      if (likeCount > 0) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '$likeCount',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+                // 评论按钮
+                Row(
+                  children: [
+                    Icon(Icons.chat_bubble_outline,
+                        size: 20, color: Colors.grey[600]),
+                    if (comments.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '${comments.length}',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             const Divider(),
             if (comments.isEmpty)
               const Padding(

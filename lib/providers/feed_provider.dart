@@ -2,22 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:trueman/data/models.dart';
 import 'package:trueman/services/ai_service.dart';
 import 'package:trueman/services/database_service.dart';
+import 'package:trueman/services/engagement_service.dart';
 import 'package:trueman/services/simulation_service.dart';
 import 'package:uuid/uuid.dart';
 
 class FeedProvider extends ChangeNotifier {
   final SimulationService _simService = SimulationService();
   final AIService _aiService = AIService();
+  final EngagementService _engagementService = EngagementService();
   final DatabaseService _dbService = DatabaseService();
   List<Post> _posts = [];
-  // No longer blocking UI
 
   FeedProvider() {
     _init();
   }
 
   List<Post> get posts => List.unmodifiable(_posts);
-  bool get isGenerating => false; // Always false in background mode
+  bool get isGenerating => false;
   Comment? get replyingToComment => _replyingToComment;
 
   Comment? _replyingToComment;
@@ -31,9 +32,9 @@ class FeedProvider extends ChangeNotifier {
 
   Future<void> _init() async {
     await _dbService.init();
-    await _simService.init(); // Initialize simulation loop
+    await _simService.init();
+    await _engagementService.init();
 
-    // Listen for new events from simulation
     _simService.onEventProcessed.listen((event) {
       if (event.type == 'comment_reply') {
         _handleNewCommentEvent(event);
@@ -41,7 +42,6 @@ class FeedProvider extends ChangeNotifier {
     });
 
     _posts = await _dbService.getAllPosts();
-    // Sort comments initially too
     for (var post in _posts) {
       if (post.comments != null && post.comments!.isNotEmpty) {
         post.comments!.sort((a, b) =>
@@ -53,24 +53,13 @@ class FeedProvider extends ChangeNotifier {
 
   void _handleNewCommentEvent(SimulationEvent event) async {
     print('[FeedProvider] Received new comment event: ${event.uuid}');
-    // Refresh posts from DB to get the latest state including the new comment
-    // Optimization: Could just find the post in memory and add it, but refreshing is safer for consistency
     _posts = await _dbService.getAllPosts();
 
-    // Explicitly sort comments for all posts (or just the target one)
     for (var post in _posts) {
       if (post.comments != null && post.comments!.isNotEmpty) {
         post.comments!.sort((a, b) =>
             (a.timestamp ?? DateTime(0)).compareTo(b.timestamp ?? DateTime(0)));
       }
-    }
-
-    print('[FeedProvider] Refreshed posts. Count: ${_posts.length}');
-    if (_posts.isNotEmpty) {
-      final post = _posts.firstWhere((p) => p.uuid == event.targetId,
-          orElse: () => _posts.first);
-      print(
-          '[FeedProvider] Target post comments count: ${post.comments?.length ?? 0}');
     }
     notifyListeners();
   }
@@ -82,15 +71,14 @@ class FeedProvider extends ChangeNotifier {
       author: _currentUser,
       content: content,
       timestamp: DateTime.now(),
-      comments: [], // Initialize list
+      comments: [],
+      likes: [],
     );
 
-    // Save to DB and Local List
     await _dbService.savePost(newPost);
     _posts.insert(0, newPost);
     notifyListeners();
 
-    // Trigger AI Planning (Background)
     _aiService.planInteraction(newPost);
   }
 
@@ -112,28 +100,41 @@ class FeedProvider extends ChangeNotifier {
       replyToName: targetComment.author?.name,
     );
 
-    // Find post
     final postIndex = _posts.indexWhere((p) => p.uuid == targetComment.postId);
     if (postIndex == -1) return;
 
     final post = _posts[postIndex];
 
-    // Optimistic Update
     if (post.comments == null) {
       post.comments = [userComment];
     } else {
       post.comments = List.from(post.comments!)..add(userComment);
     }
 
-    // Clear reply state immediately
     _replyingToComment = null;
     notifyListeners();
 
-    // Save user comment
     await _dbService.updatePost(post);
 
-    // AI Reply logic
-    // Fire and forget, don't await because planReply is async and we don't want to block UI or wait for it
     _aiService.planReply(userComment, targetComment, post);
+  }
+
+  Future<bool> toggleLike(String postUuid) async {
+    final result = await _engagementService.toggleLike(postUuid, _currentUser);
+    if (result) {
+      // 点赞成功，刷新该帖子
+      final post = _posts.firstWhere((p) => p.uuid == postUuid);
+      final freshPost = await _dbService.isar.posts.filter().uuidEqualTo(postUuid).findFirst();
+      if (freshPost != null) {
+        final index = _posts.indexWhere((p) => p.uuid == postUuid);
+        _posts[index] = freshPost;
+        notifyListeners();
+      }
+    }
+    return result;
+  }
+
+  bool isLiked(Post post) {
+    return (post.likes ?? []).any((l) => l.userId == _currentUser.id);
   }
 }
