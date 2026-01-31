@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:trueman/data/models.dart';
+import 'package:trueman/views/characters_page.dart';
 import 'package:trueman/views/create_persona_page.dart';
 
 // --- State Management ---
@@ -9,20 +10,58 @@ import 'package:trueman/providers/feed_provider.dart';
 
 // --- UI Components ---
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int _currentIndex = 0;
+  final List<Widget> _pages = [
+    const HomeView(),
+    const CharactersPage(),
+  ];
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => FeedProvider(),
-      child: const HomeView(),
+    return Scaffold(
+      body: _pages[_currentIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: '首页',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
+            label: '角色',
+          ),
+        ],
+      ),
     );
   }
 }
 
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => FeedProvider(),
+      child: const HomeViewContent(),
+    );
+  }
+}
+
+class HomeViewContent extends StatelessWidget {
+  const HomeViewContent({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +129,6 @@ class HomeView extends StatelessWidget {
               },
             ),
           ),
-          // Now this context comes from HomeView.build, which is below ChangeNotifierProvider
           if (context.watch<FeedProvider>().isGenerating)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -114,19 +152,10 @@ class PostItem extends StatelessWidget {
     final authorName = post.author?.name ?? 'Unknown';
     final authorAvatar = post.author?.avatar ?? '?';
     final comments = post.comments ?? [];
-
-    print(
-        '[PostItem] Building post ${post.uuid} with ${comments.length} comments');
-
-    // Detailed dump to debug missing render
-    for (var i = 0; i < comments.length; i++) {
-      final c = comments[i];
-      // Debug: print index and start of content
-      final preview = (c.content != null && c.content!.length > 5)
-          ? c.content!.substring(0, 5)
-          : c.content;
-      print('[PostItem] Comment $i: $preview (Author: ${c.author?.name})');
-    }
+    final likes = post.likes ?? [];
+    final provider = context.read<FeedProvider>();
+    final isLiked = provider.isLiked(post);
+    final likeCount = likes.length;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -160,7 +189,54 @@ class PostItem extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(post.content ?? '', style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            // 点赞和评论按钮
+            Row(
+              children: [
+                // 点赞按钮
+                GestureDetector(
+                  onTap: () => provider.toggleLike(post.uuid),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isLiked ? Icons.favorite : Icons.favorite_border,
+                        size: 20,
+                        color: isLiked ? Colors.red : Colors.grey[600],
+                      ),
+                      if (likeCount > 0) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '$likeCount',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+                // 评论按钮
+                Row(
+                  children: [
+                    Icon(Icons.chat_bubble_outline,
+                        size: 20, color: Colors.grey[600]),
+                    if (comments.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '${comments.length}',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             const Divider(),
             if (comments.isEmpty)
               const Padding(
@@ -187,15 +263,6 @@ class CommentItem extends StatelessWidget {
     final authorName = comment.author?.name ?? 'Unknown';
     final authorAvatar = comment.author?.avatar ?? '?';
 
-    // Debug log to see if this specific comment is rendering
-    // print('[CommentItem] Rendering comment: "${comment.content}" from $authorName');
-
-    // Only print if it's the specific target reply to reduce noise, or just print last few?
-    // Let's print simplified version
-    if (comment.content != null && comment.content!.length > 10) {
-      print('[CommentItem] Rendering: ${comment.content!.substring(0, 10)}...');
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
@@ -206,9 +273,6 @@ class CommentItem extends StatelessWidget {
           Expanded(
             child: GestureDetector(
               onTap: () {
-                // Determine if we should allow replying to this person
-                // Currently allow replying to anyone except self? Or everyone?
-                // Let's allow everyone for now.
                 context.read<FeedProvider>().setReplyTo(comment);
               },
               child: Container(
@@ -307,9 +371,6 @@ class _InputAreaState extends State<InputArea> {
     final replyingTo = context.watch<FeedProvider>().replyingToComment;
 
     if (replyingTo != null && !_focusNode.hasFocus) {
-      // Auto focus if reply gets set externally?
-      // Maybe not forcing it is better UX, but let's see.
-      // Actually, usually you tap reply and keyboard opens.
       FocusScope.of(context).requestFocus(_focusNode);
     }
 

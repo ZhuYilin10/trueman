@@ -45,6 +45,23 @@ class Comment {
   });
 }
 
+@embedded
+class Like {
+  String? id;
+  String? userId;
+  String? userName;
+  String? userAvatar;
+  DateTime? timestamp;
+
+  Like({
+    this.id,
+    this.userId,
+    this.userName,
+    this.userAvatar,
+    this.timestamp,
+  });
+}
+
 @collection
 class Post {
   Id id = Isar.autoIncrement; // Isar auto-increment ID
@@ -56,6 +73,7 @@ class Post {
   String? content;
   DateTime? timestamp;
   List<Comment>? comments;
+  List<Like>? likes;
 
   Post({
     String? originalUuid,
@@ -63,6 +81,7 @@ class Post {
     this.content,
     this.timestamp,
     this.comments,
+    this.likes,
   }) : uuid = originalUuid ?? const Uuid().v4();
 }
 
@@ -108,6 +127,7 @@ class UserPersona {
   DateTime? createdAt;
 
   bool isActive; // 是否参与互动
+  bool isAIAuthor; // 是否会发布自己的动态
 
   UserPersona({
     String? originalUuid,
@@ -117,5 +137,26 @@ class UserPersona {
     this.embedding,
     this.createdAt,
     this.isActive = true,
+    this.isAIAuthor = false,
+  }) : uuid = originalUuid ?? const Uuid().v4();
+}
+
+/// 用户关注的 AI 角色
+@collection
+class Follow {
+  Id id = Isar.autoIncrement;
+
+  @Index(unique: true, replace: true)
+  String uuid;
+
+  String? userId; // 固定为 'user_me'
+  String? personaId; // 被关注的角色 ID
+  DateTime? followedAt;
+
+  Follow({
+    String? originalUuid,
+    this.userId,
+    this.personaId,
+    this.followedAt,
   }) : uuid = originalUuid ?? const Uuid().v4();
 }
