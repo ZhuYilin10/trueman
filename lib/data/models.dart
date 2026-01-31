@@ -121,12 +121,13 @@ class UserPersona {
   String uuid;
 
   String? name;
-  String? avatar; // Emoji
-  String? systemPrompt; // 性格描述
+  String? avatar;
+  String? systemPrompt;
   List<double>? embedding;
   DateTime? createdAt;
 
-  bool isActive; // 是否参与互动
+  bool isActive;
+  bool isAIAuthor; // 是否会发布自己的动态
 
   UserPersona({
     String? originalUuid,
@@ -136,6 +137,27 @@ class UserPersona {
     this.embedding,
     this.createdAt,
     this.isActive = true,
+    this.isAIAuthor = false,
+  }) : uuid = originalUuid ?? const Uuid().v4();
+}
+
+/// 用户关注的 AI 角色
+@collection
+class Follow {
+  Id id = Isar.autoIncrement;
+
+  @Index(unique: true, replace: true)
+  String uuid;
+
+  String? userId; // 固定为 'user_me'
+  String? personaId; // 被关注的角色 ID
+  DateTime? followedAt;
+
+  Follow({
+    String? originalUuid,
+    this.userId,
+    this.personaId,
+    this.followedAt,
   }) : uuid = originalUuid ?? const Uuid().v4();
 }
 

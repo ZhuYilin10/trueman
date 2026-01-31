@@ -2532,23 +2532,28 @@ const UserPersonaSchema = CollectionSchema(
       name: r'embedding',
       type: IsarType.doubleList,
     ),
-    r'isActive': PropertySchema(
+    r'isAIAuthor': PropertySchema(
       id: 3,
+      name: r'isAIAuthor',
+      type: IsarType.bool,
+    ),
+    r'isActive': PropertySchema(
+      id: 4,
       name: r'isActive',
       type: IsarType.bool,
     ),
     r'name': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'name',
       type: IsarType.string,
     ),
     r'systemPrompt': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'systemPrompt',
       type: IsarType.string,
     ),
     r'uuid': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'uuid',
       type: IsarType.string,
     )
@@ -2624,10 +2629,11 @@ void _userPersonaSerialize(
   writer.writeString(offsets[0], object.avatar);
   writer.writeDateTime(offsets[1], object.createdAt);
   writer.writeDoubleList(offsets[2], object.embedding);
-  writer.writeBool(offsets[3], object.isActive);
-  writer.writeString(offsets[4], object.name);
-  writer.writeString(offsets[5], object.systemPrompt);
-  writer.writeString(offsets[6], object.uuid);
+  writer.writeBool(offsets[3], object.isAIAuthor);
+  writer.writeBool(offsets[4], object.isActive);
+  writer.writeString(offsets[5], object.name);
+  writer.writeString(offsets[6], object.systemPrompt);
+  writer.writeString(offsets[7], object.uuid);
 }
 
 UserPersona _userPersonaDeserialize(
@@ -2640,12 +2646,13 @@ UserPersona _userPersonaDeserialize(
     avatar: reader.readStringOrNull(offsets[0]),
     createdAt: reader.readDateTimeOrNull(offsets[1]),
     embedding: reader.readDoubleList(offsets[2]),
-    isActive: reader.readBoolOrNull(offsets[3]) ?? true,
-    name: reader.readStringOrNull(offsets[4]),
-    systemPrompt: reader.readStringOrNull(offsets[5]),
+    isAIAuthor: reader.readBoolOrNull(offsets[3]) ?? false,
+    isActive: reader.readBoolOrNull(offsets[4]) ?? true,
+    name: reader.readStringOrNull(offsets[5]),
+    systemPrompt: reader.readStringOrNull(offsets[6]),
   );
   object.id = id;
-  object.uuid = reader.readString(offsets[6]);
+  object.uuid = reader.readString(offsets[7]);
   return object;
 }
 
@@ -2663,12 +2670,14 @@ P _userPersonaDeserializeProp<P>(
     case 2:
       return (reader.readDoubleList(offset)) as P;
     case 3:
-      return (reader.readBoolOrNull(offset) ?? true) as P;
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 4:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBoolOrNull(offset) ?? true) as P;
     case 5:
       return (reader.readStringOrNull(offset)) as P;
     case 6:
+      return (reader.readStringOrNull(offset)) as P;
+    case 7:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3319,6 +3328,16 @@ extension UserPersonaQueryFilter
     });
   }
 
+  QueryBuilder<UserPersona, UserPersona, QAfterFilterCondition>
+      isAIAuthorEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isAIAuthor',
+        value: value,
+      ));
+    });
+  }
+
   QueryBuilder<UserPersona, UserPersona, QAfterFilterCondition> isActiveEqualTo(
       bool value) {
     return QueryBuilder.apply(this, (query) {
@@ -3795,6 +3814,18 @@ extension UserPersonaQuerySortBy
     });
   }
 
+  QueryBuilder<UserPersona, UserPersona, QAfterSortBy> sortByIsAIAuthor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isAIAuthor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserPersona, UserPersona, QAfterSortBy> sortByIsAIAuthorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isAIAuthor', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserPersona, UserPersona, QAfterSortBy> sortByIsActive() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isActive', Sort.asc);
@@ -3883,6 +3914,18 @@ extension UserPersonaQuerySortThenBy
     });
   }
 
+  QueryBuilder<UserPersona, UserPersona, QAfterSortBy> thenByIsAIAuthor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isAIAuthor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserPersona, UserPersona, QAfterSortBy> thenByIsAIAuthorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isAIAuthor', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserPersona, UserPersona, QAfterSortBy> thenByIsActive() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isActive', Sort.asc);
@@ -3954,6 +3997,12 @@ extension UserPersonaQueryWhereDistinct
     });
   }
 
+  QueryBuilder<UserPersona, UserPersona, QDistinct> distinctByIsAIAuthor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isAIAuthor');
+    });
+  }
+
   QueryBuilder<UserPersona, UserPersona, QDistinct> distinctByIsActive() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'isActive');
@@ -4009,6 +4058,12 @@ extension UserPersonaQueryProperty
     });
   }
 
+  QueryBuilder<UserPersona, bool, QQueryOperations> isAIAuthorProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isAIAuthor');
+    });
+  }
+
   QueryBuilder<UserPersona, bool, QQueryOperations> isActiveProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isActive');
@@ -4028,6 +4083,1041 @@ extension UserPersonaQueryProperty
   }
 
   QueryBuilder<UserPersona, String, QQueryOperations> uuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'uuid');
+    });
+  }
+}
+
+// coverage:ignore-file
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
+
+extension GetFollowCollection on Isar {
+  IsarCollection<Follow> get follows => this.collection();
+}
+
+const FollowSchema = CollectionSchema(
+  name: r'Follow',
+  id: -6732277627313115666,
+  properties: {
+    r'followedAt': PropertySchema(
+      id: 0,
+      name: r'followedAt',
+      type: IsarType.dateTime,
+    ),
+    r'personaId': PropertySchema(
+      id: 1,
+      name: r'personaId',
+      type: IsarType.string,
+    ),
+    r'userId': PropertySchema(
+      id: 2,
+      name: r'userId',
+      type: IsarType.string,
+    ),
+    r'uuid': PropertySchema(
+      id: 3,
+      name: r'uuid',
+      type: IsarType.string,
+    )
+  },
+  estimateSize: _followEstimateSize,
+  serialize: _followSerialize,
+  deserialize: _followDeserialize,
+  deserializeProp: _followDeserializeProp,
+  idName: r'id',
+  indexes: {
+    r'uuid': IndexSchema(
+      id: 2134397340427724972,
+      name: r'uuid',
+      unique: true,
+      replace: true,
+      properties: [
+        IndexPropertySchema(
+          name: r'uuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
+  links: {},
+  embeddedSchemas: {},
+  getId: _followGetId,
+  getLinks: _followGetLinks,
+  attach: _followAttach,
+  version: '3.1.0+1',
+);
+
+int _followEstimateSize(
+  Follow object,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  var bytesCount = offsets.last;
+  {
+    final value = object.personaId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.userId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  bytesCount += 3 + object.uuid.length * 3;
+  return bytesCount;
+}
+
+void _followSerialize(
+  Follow object,
+  IsarWriter writer,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  writer.writeDateTime(offsets[0], object.followedAt);
+  writer.writeString(offsets[1], object.personaId);
+  writer.writeString(offsets[2], object.userId);
+  writer.writeString(offsets[3], object.uuid);
+}
+
+Follow _followDeserialize(
+  Id id,
+  IsarReader reader,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  final object = Follow(
+    followedAt: reader.readDateTimeOrNull(offsets[0]),
+    personaId: reader.readStringOrNull(offsets[1]),
+    userId: reader.readStringOrNull(offsets[2]),
+  );
+  object.id = id;
+  object.uuid = reader.readString(offsets[3]);
+  return object;
+}
+
+P _followDeserializeProp<P>(
+  IsarReader reader,
+  int propertyId,
+  int offset,
+  Map<Type, List<int>> allOffsets,
+) {
+  switch (propertyId) {
+    case 0:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 1:
+      return (reader.readStringOrNull(offset)) as P;
+    case 2:
+      return (reader.readStringOrNull(offset)) as P;
+    case 3:
+      return (reader.readString(offset)) as P;
+    default:
+      throw IsarError('Unknown property with id $propertyId');
+  }
+}
+
+Id _followGetId(Follow object) {
+  return object.id;
+}
+
+List<IsarLinkBase<dynamic>> _followGetLinks(Follow object) {
+  return [];
+}
+
+void _followAttach(IsarCollection<dynamic> col, Id id, Follow object) {
+  object.id = id;
+}
+
+extension FollowByIndex on IsarCollection<Follow> {
+  Future<Follow?> getByUuid(String uuid) {
+    return getByIndex(r'uuid', [uuid]);
+  }
+
+  Follow? getByUuidSync(String uuid) {
+    return getByIndexSync(r'uuid', [uuid]);
+  }
+
+  Future<bool> deleteByUuid(String uuid) {
+    return deleteByIndex(r'uuid', [uuid]);
+  }
+
+  bool deleteByUuidSync(String uuid) {
+    return deleteByIndexSync(r'uuid', [uuid]);
+  }
+
+  Future<List<Follow?>> getAllByUuid(List<String> uuidValues) {
+    final values = uuidValues.map((e) => [e]).toList();
+    return getAllByIndex(r'uuid', values);
+  }
+
+  List<Follow?> getAllByUuidSync(List<String> uuidValues) {
+    final values = uuidValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'uuid', values);
+  }
+
+  Future<int> deleteAllByUuid(List<String> uuidValues) {
+    final values = uuidValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'uuid', values);
+  }
+
+  int deleteAllByUuidSync(List<String> uuidValues) {
+    final values = uuidValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'uuid', values);
+  }
+
+  Future<Id> putByUuid(Follow object) {
+    return putByIndex(r'uuid', object);
+  }
+
+  Id putByUuidSync(Follow object, {bool saveLinks = true}) {
+    return putByIndexSync(r'uuid', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllByUuid(List<Follow> objects) {
+    return putAllByIndex(r'uuid', objects);
+  }
+
+  List<Id> putAllByUuidSync(List<Follow> objects, {bool saveLinks = true}) {
+    return putAllByIndexSync(r'uuid', objects, saveLinks: saveLinks);
+  }
+}
+
+extension FollowQueryWhereSort on QueryBuilder<Follow, Follow, QWhere> {
+  QueryBuilder<Follow, Follow, QAfterWhere> anyId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+}
+
+extension FollowQueryWhere on QueryBuilder<Follow, Follow, QWhereClause> {
+  QueryBuilder<Follow, Follow, QAfterWhereClause> idEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: id,
+        upper: id,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterWhereClause> idNotEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            )
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            );
+      } else {
+        return query
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            )
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            );
+      }
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterWhereClause> idGreaterThan(Id id,
+      {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.greaterThan(lower: id, includeLower: include),
+      );
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterWhereClause> idLessThan(Id id,
+      {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.lessThan(upper: id, includeUpper: include),
+      );
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterWhereClause> idBetween(
+    Id lowerId,
+    Id upperId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: lowerId,
+        includeLower: includeLower,
+        upper: upperId,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterWhereClause> uuidEqualTo(String uuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'uuid',
+        value: [uuid],
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterWhereClause> uuidNotEqualTo(String uuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'uuid',
+              lower: [],
+              upper: [uuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'uuid',
+              lower: [uuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'uuid',
+              lower: [uuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'uuid',
+              lower: [],
+              upper: [uuid],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+}
+
+extension FollowQueryFilter on QueryBuilder<Follow, Follow, QFilterCondition> {
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> followedAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'followedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> followedAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'followedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> followedAtEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'followedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> followedAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'followedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> followedAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'followedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> followedAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'followedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> idEqualTo(Id value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> idGreaterThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> idLessThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> idBetween(
+    Id lower,
+    Id upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'id',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'personaId',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'personaId',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'personaId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'personaId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'personaId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'personaId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'personaId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'personaId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'personaId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'personaId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'personaId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> personaIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'personaId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'userId',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'userId',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'userId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'userId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'userId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'userId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'userId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'userId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'userId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'userId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'userId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> userIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'userId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'uuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'uuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'uuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'uuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'uuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'uuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidContains(String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'uuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'uuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'uuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterFilterCondition> uuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'uuid',
+        value: '',
+      ));
+    });
+  }
+}
+
+extension FollowQueryObject on QueryBuilder<Follow, Follow, QFilterCondition> {}
+
+extension FollowQueryLinks on QueryBuilder<Follow, Follow, QFilterCondition> {}
+
+extension FollowQuerySortBy on QueryBuilder<Follow, Follow, QSortBy> {
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByFollowedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'followedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByFollowedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'followedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByPersonaId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'personaId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByPersonaIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'personaId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByUuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> sortByUuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uuid', Sort.desc);
+    });
+  }
+}
+
+extension FollowQuerySortThenBy on QueryBuilder<Follow, Follow, QSortThenBy> {
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByFollowedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'followedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByFollowedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'followedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenById() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByPersonaId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'personaId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByPersonaIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'personaId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByUuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QAfterSortBy> thenByUuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'uuid', Sort.desc);
+    });
+  }
+}
+
+extension FollowQueryWhereDistinct on QueryBuilder<Follow, Follow, QDistinct> {
+  QueryBuilder<Follow, Follow, QDistinct> distinctByFollowedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'followedAt');
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QDistinct> distinctByPersonaId(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'personaId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QDistinct> distinctByUserId(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'userId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<Follow, Follow, QDistinct> distinctByUuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'uuid', caseSensitive: caseSensitive);
+    });
+  }
+}
+
+extension FollowQueryProperty on QueryBuilder<Follow, Follow, QQueryProperty> {
+  QueryBuilder<Follow, int, QQueryOperations> idProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<Follow, DateTime?, QQueryOperations> followedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'followedAt');
+    });
+  }
+
+  QueryBuilder<Follow, String?, QQueryOperations> personaIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'personaId');
+    });
+  }
+
+  QueryBuilder<Follow, String?, QQueryOperations> userIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'userId');
+    });
+  }
+
+  QueryBuilder<Follow, String, QQueryOperations> uuidProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'uuid');
     });
