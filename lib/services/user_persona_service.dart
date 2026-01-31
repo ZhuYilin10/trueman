@@ -6,17 +6,25 @@ import 'package:uuid/uuid.dart';
 class UserPersonaService {
   final DatabaseService _dbService = DatabaseService();
   final LLMService _llmService;
+  bool _initialized = false;
 
   UserPersonaService({LLMService? llmService}) : _llmService = llmService ?? VolcEngineService();
 
+  Future<void> _ensureInitialized() async {
+    if (!_initialized) {
+      await _dbService.init();
+      _initialized = true;
+    }
+  }
+
   Future<List<UserPersona>> getAllPersonas() async {
-    await _dbService.init();
+    await _ensureInitialized();
     final personas = await _dbService.isar.userPersonas.where().findAll();
     return personas.where((p) => p.isActive).toList();
   }
 
   Future<UserPersona?> getPersona(String uuid) async {
-    await _dbService.init();
+    await _ensureInitialized();
     return _dbService.isar.userPersonas.filter().uuidEqualTo(uuid).findFirst();
   }
 
@@ -25,7 +33,7 @@ class UserPersonaService {
     required String avatar,
     required String systemPrompt,
   }) async {
-    await _dbService.init();
+    await _ensureInitialized();
 
     // 生成 embedding
     List<double>? embedding;
@@ -52,14 +60,14 @@ class UserPersonaService {
   }
 
   Future<void> updatePersona(UserPersona persona) async {
-    await _dbService.init();
+    await _ensureInitialized();
     await _dbService.isar.writeTxn(() async {
       await _dbService.isar.userPersonas.put(persona);
     });
   }
 
   Future<void> deletePersona(String uuid) async {
-    await _dbService.init();
+    await _ensureInitialized();
     final persona = await _dbService.isar.userPersonas.filter().uuidEqualTo(uuid).findFirst();
     if (persona != null) {
       await _dbService.isar.writeTxn(() async {
@@ -69,7 +77,7 @@ class UserPersonaService {
   }
 
   Future<void> toggleActive(String uuid) async {
-    await _dbService.init();
+    await _ensureInitialized();
     final persona = await _dbService.isar.userPersonas.filter().uuidEqualTo(uuid).findFirst();
     if (persona != null) {
       persona.isActive = !persona.isActive;
