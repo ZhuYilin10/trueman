@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:trueman/data/models.dart';
+import 'package:trueman/views/create_persona_page.dart';
 
 // --- State Management ---
 import 'package:trueman/providers/feed_provider.dart';
@@ -33,6 +34,33 @@ class HomeView extends StatelessWidget {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.add),
+            onSelected: (value) {
+              if (value == 'create_persona') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CreatePersonaPage(),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'create_persona',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_add, size: 20),
+                    SizedBox(width: 8),
+                    Text('创建角色'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
